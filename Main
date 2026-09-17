@@ -1,0 +1,99 @@
+import csv  # this lets us read data out of a .csv file
+
+
+class Patient:
+    # This class is a blueprint for one patient (one row of our spreadsheet)
+
+    all_patients = []  # class variable (static variable) - one shared list that EVERY patient object gets added to
+
+    def __init__(self, donor_id: str, age_at_death: float, sex: str, education: str,
+                 apoe_genotype: str, cognitive_status: str, thal: str,
+                 head_injury: str, abeta40: float, abeta42: float, ttau: float, ptau: float):
+        # This is the constructor - it runs once, when we create a new Patient
+        self.donor_id = donor_id                #  name tag for this patient
+        self.age_at_death = age_at_death         
+        self.sex = sex                           
+        self.education = education               # how far they went in education
+        self.apoe_genotype = apoe_genotype        
+        self.cognitive_status = cognitive_status  # "Dementia" or "No dementia"
+        self.thal = thal                         # the original text
+        self.thal_score = self._get_thal_number(thal)  # number so we can sort it
+        self.head_injury = head_injury           
+        self.abeta40 = abeta40                   # Amyloid Beta 40 level (a number)
+        self.abeta42 = abeta42                   # Amyloid Beta 42 level (a number)
+        self.ttau = ttau                         # total Tau level (a number)
+        self.ptau = ptau                         # phosphorylated Tau level (a number)
+
+        Patient.all_patients.append(self)        # add this new patient to our shared class-wide list (like Dog.all_dogs)
+
+    def _get_thal_number(self, thal_text):
+        # Helper that turns "Thal 3" into just the number 3 (so we can do math/sorting with it)
+        try:
+            return int(thal_text.replace("Thal", "").strip())  
+        except (ValueError, AttributeError):
+            return None  # if something weird/blank comes in, just return None instead of crashing
+
+    def __repr__(self):
+        # This controls what shows up when we print a Patient object
+        return (f"Patient({self.donor_id}, Age={self.age_at_death}, Sex={self.sex}, "
+                f"Head Injury={self.head_injury}, pTAU={self.ptau}, "
+                f"ABeta42={self.abeta42})")  # a short, readable summary line for one patient
+
+    def get_ptau(self):
+        # A simple "getter" instance method
+        return self.ptau
+
+    @classmethod
+    def instantiate_from_csv(cls, filename: str):
+        # This class method reads the whole csv file and builds a Patient object for every row
+        # Every new Patient adds itself to Patient.all_patients automatically (see the constructor above)
+
+        with open(filename, encoding="utf-8-sig") as f:  # open the csv file for reading
+            reader = csv.DictReader(f)                    # grabs each row as a dictionary using column names
+            rows_of_patients = list(reader)                # makes file into a list of rows
+
+        for row in rows_of_patients:  # loop through every row (every patient) in the csv
+            cls(
+                donor_id=row["Donor ID"],                                   
+                age_at_death=cls._to_number(row["Age at Death"]),  # convert to a number
+                sex=row["Sex"],                                             
+                education=row["Highest level of education"],               
+                apoe_genotype=row["APOE Genotype"],                       
+                cognitive_status=row["Cognitive Status"],                  
+                thal=row["Thal"],                                           
+                head_injury=row["Known head injury"] if row["Known head injury"] != "" else None,  # blank -> None
+                abeta40=cls._to_number(row["ABeta40 pg/ug"]),               
+                abeta42=cls._to_number(row["ABeta42 pg/ug"]),               
+                ttau=cls._to_number(row["tTAU pg/ug"]),                    
+                ptau=cls._to_number(row["pTAU pg/ug"]),                     
+            )
+          
+
+    @staticmethod
+    def _to_number(value):
+        # Small helper that turns a text value like "82" into the number 82, or None if it's blank/bad
+        try:
+            return float(value)  # try to convert to a number
+        except (ValueError, TypeError):
+            return None  # if it's empty or not a number, just use None instead of crashing
+
+    @classmethod
+    def filter(cls, patient_list, sex="any", cognitive_status="any", head_injury="any",
+               thal_score="any", age_at_death="any", apoe_genotype="any"):
+        # This filters a list of patients down to only the ones matching what we ask for.
+        # This mirrors the Dog.filter() pattern: check each attribute one at a time, removing non-matches.
+        remaining = patient_list  # narrow down attribute by attribute
+        remove_list = []          # temporary holding spot for patients that fail attribute
+
+        attr_values = (sex, cognitive_status, head_injury, thal_score, age_at_death, apoe_genotype)
+        attr_names = ("sex", "cognitive_status", "head_injury", "thal_score", "age_at_death", "apoe_genotype")
+
+        for i in range(len(attr_values)):           # go attribute by attribute (sex, then cognitive_status, etc.)
+            if attr_values[i] != "any":              # only filter on this attribute if the user actually asked for it
+                for p in remaining:                  
+                    if getattr(p, attr_names[i]) != attr_values[i]:  # getattr grabs
+                        remove_list.append(p)        
+                remaining = [p for p in remaining if p not in remove_list]  # keep only the patients NOT marked
+                remove_list.clear()                  # empty out the removal list before checking the next attribute
+
+        return remaining 
